@@ -1,35 +1,22 @@
-import http from 'http';
-import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
+import { WebSocketServer } from 'ws';
 
 const PORT = process.env.PORT || 3000;
 
-const jobStore = new Map(); // jobId => { progress, timer }
-const clients = new Map();  // jobId => Set of WebSocket
+const jobStore = new Map(); // jobId -> { progress }
+const clients = new Map();  // jobId -> Set of WebSocket
 
-function storeJobProgress(jobId, progress) {
-  // If no clients yet, store in memory
-  if (!clients.has(jobId)) {
-    jobStore.set(jobId, { progress });
-
-    // Clear after 10 minutes if unused
-    setTimeout(() => {
-      if (jobStore.has(jobId)) {
-        jobStore.delete(jobId);
-        console.log(`🧹 Cleared job ${jobId} after timeout`);
-      }
-    }, 10 * 60 * 1000);
-  } else {
-    // Push directly if listeners exist
+function sendToClients(jobId, progress) {
+  const data = JSON.stringify({ jobId, progress });
+  if (clients.has(jobId)) {
     for (const ws of clients.get(jobId)) {
       if (ws.readyState === ws.OPEN) {
-        ws.send(JSON.stringify({ jobId, progress }));
+        ws.send(data);
       }
     }
   }
 }
 
-// HTTP + WS server
 const server = createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/update') {
     let body = '';
@@ -37,48 +24,47 @@ const server = createServer((req, res) => {
     req.on('end', () => {
       try {
         const { jobId, progress } = JSON.parse(body);
-        storeJobProgress(jobId, progress);
+        if (!clients.has(jobId)) {
+          jobStore.set(jobId, progress);
+        } else {
+          sendToClients(jobId, progress);
+        }
         res.writeHead(200).end('OK');
-      } catch (err) {
+      } catch {
         res.writeHead(400).end('Invalid JSON');
       }
     });
   } else {
-    res.writeHead(200).end('WebSocket Server OK');
+    res.writeHead(200).end('RenderServer Running');
   }
 });
 
 const wss = new WebSocketServer({ server });
 
-wss.on('connection', (ws, req) => {
-  let jobId;
-
+wss.on('connection', (ws) => {
   ws.once('message', (msg) => {
     try {
       const { subscribeTo } = JSON.parse(msg);
-      jobId = subscribeTo;
-
+      const jobId = subscribeTo;
       if (!clients.has(jobId)) clients.set(jobId, new Set());
       clients.get(jobId).add(ws);
 
-      // Send buffered progress if exists
+      // Send stored progress if exists
       if (jobStore.has(jobId)) {
-        ws.send(JSON.stringify({ jobId, progress: jobStore.get(jobId).progress }));
-        jobStore.delete(jobId); // delivered
+        ws.send(JSON.stringify({ jobId, progress: jobStore.get(jobId) }));
+        jobStore.delete(jobId);
       }
 
       ws.on('close', () => {
         clients.get(jobId).delete(ws);
-        if (clients.get(jobId).size === 0) {
-          clients.delete(jobId);
-        }
+        if (clients.get(jobId).size === 0) clients.delete(jobId);
       });
-    } catch (e) {
+    } catch {
       ws.close();
     }
   });
 });
 
 server.listen(PORT, () => {
-  console.log(`🚀 WebSocket + HTTP server on port ${PORT}`);
+  console.log(`🚀 renderServer running on port ${PORT}`);
 });
