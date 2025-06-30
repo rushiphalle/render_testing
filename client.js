@@ -1,8 +1,8 @@
 import WebSocket from 'ws';
 import cliProgress from 'cli-progress';
 
-const SERVER_URL = 'wss://your-render-server-url.com'; // 🔁 Replace with your WebSocket server URL
-const TOTAL = 1000;
+const SERVER_URL = 'wss://render-testing-m5mh.onrender.com'; // 🔁 Replace with your WebSocket server URL
+const TOTAL = 5000;
 const BATCH = 50;
 const DELAY = 200;
 

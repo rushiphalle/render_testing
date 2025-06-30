@@ -8,26 +8,31 @@ const server = http.createServer((req, res) => {
 });
 
 const wss = new WebSocketServer({ server });
-let totalConnected = 0;
-let totalClosed = 0;
+
+let connected = 0;
+let closed = 0;
+
+function printStatus() {
+  process.stdout.write(
+    `\r🔌 Connected: ${connected.toString().padStart(4)} | 🛑 Closed: ${closed.toString().padStart(4)}`
+  );
+}
 
 wss.on('connection', (ws) => {
-  totalConnected++;
-  process.stdout.write(`\r🔌 Connected: ${totalConnected} | 🛑 Closed: ${totalClosed}`);
+  connected++;
+  printStatus();
 
   ws.on('close', () => {
-    totalClosed++;
-    process.stdout.write(`\r🔌 Connected: ${totalConnected} | 🛑 Closed: ${totalClosed}`);
+    closed++;
+    printStatus();
   });
 
   ws.on('error', () => {
-    totalClosed++;
-    process.stdout.write(`\r🔌 Connected: ${totalConnected} | 🛑 Closed: ${totalClosed}`);
+    closed++;
+    printStatus();
   });
-
-  ws.send('connected');
 });
 
 server.listen(PORT, () => {
-  console.log(`🚀 WebSocket server on port ${PORT}`);
+  console.log(`🚀 WebSocket server running on port ${PORT}`);
 });
