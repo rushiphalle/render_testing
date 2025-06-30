@@ -1,34 +1,59 @@
 import WebSocket from 'ws';
+import cliProgress from 'cli-progress';
 
-const SERVER_URL = 'wss://your-render-websocket-url.com'; // 🔁 Replace with your Render WebSocket URL
-const TOTAL_CONNECTIONS = 1000;
-const sockets = [];
+const SERVER_URL = 'wss://your-render-server-url.com'; // 🔁 Replace with your WebSocket server URL
+const TOTAL = 1000;
+const BATCH = 50;
+const DELAY = 200;
 
 let connected = 0;
 let closed = 0;
-let errored = 0;
+let failed = 0;
 
-for (let i = 0; i < TOTAL_CONNECTIONS; i++) {
-  const ws = new WebSocket(SERVER_URL);
+const bar = new cliProgress.MultiBar({
+  clearOnComplete: false,
+  hideCursor: true,
+  format: '{type} |{bar}| {value}/{total} {status}',
+}, cliProgress.Presets.shades_classic);
 
-  ws.on('open', () => {
-    connected++;
-    console.log(`[${i}] ✅ Connected. Total: ${connected}`);
-  });
+const connectBar = bar.create(TOTAL, 0, { type: '🔌 Connecting', status: '' });
+const closeBar = bar.create(TOTAL, 0, { type: '🛑 Closed     ', status: '' });
+const errorBar = bar.create(TOTAL, 0, { type: '❌ Failed     ', status: '' });
 
-  ws.on('message', (data) => {
-    console.log(`[${i}] 📥 Received: ${data.length} bytes`);
-  });
+let current = 0;
 
-  ws.on('error', (err) => {
-    errored++;
-    console.error(`[${i}] ❌ Error: ${err.message} | Total errors: ${errored}`);
-  });
+function connectBatch() {
+  for (let i = 0; i < BATCH && current < TOTAL; i++, current++) {
+    const ws = new WebSocket(SERVER_URL);
 
-  ws.on('close', (code, reason) => {
-    closed++;
-    console.log(`[${i}] 🔌 Closed. Code: ${code}, Reason: ${reason || 'N/A'} | Total closed: ${closed}`);
-  });
+    ws.on('open', () => {
+      connected++;
+      connectBar.update(connected);
+    });
 
-  sockets.push(ws);
+    ws.on('close', () => {
+      closed++;
+      closeBar.update(closed);
+    });
+
+    ws.on('error', () => {
+      failed++;
+      errorBar.update(failed);
+    });
+  }
+
+  if (current < TOTAL) {
+    setTimeout(connectBatch, DELAY);
+  } else {
+    // Stop bar when all connections are attempted
+    const checkCompletion = setInterval(() => {
+      if (connected + failed + closed >= TOTAL) {
+        bar.stop();
+        clearInterval(checkCompletion);
+        console.log('\n✅ Load test complete!');
+      }
+    }, 1000);
+  }
 }
+
+connectBatch();
