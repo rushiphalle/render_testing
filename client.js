@@ -1,6 +1,6 @@
 import WebSocket from 'ws';
 
-const SERVER_URL = 'wss://your-render-server.onrender.com'; // Replace with your actual Render URL
+const SERVER_URL = 'wss://render-testing-m5mh.onrender.com'; // Replace with your actual Render URL
 const TOTAL_CONNECTIONS = 1000;
 
 let active = 0;
